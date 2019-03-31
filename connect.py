@@ -26,6 +26,10 @@ def decryption_query(ciphertext, iv):
     x = r.recv(1024).decode()
     return x
 
+def extract_last_byte(x, y, z):
+    return chr(int(hex(int(x, 16) ^ int(y, 16) ^ int(z, 16))[-3:-1], 16))
+    
+
 def find_plaintext_length():
     x = encryption_query("")
     total_length, encrypted_string, IV = parse_encryption(x)
@@ -84,6 +88,8 @@ plaintext_length, prefix_padding = find_plaintext_length()
 print "\nPlaintext Length: ",
 print plaintext_length
 #====================== End of Determining Block Length ==================#
+fifteen = "0000000000000000000000000000000f"
+bytes_found = 0
 plaintext = []
 if plaintext_length % 16 != 0:
     pad = "00"*(16-plaintext_length)
@@ -94,18 +100,67 @@ start_block  = int(m.ceil(float(plaintext_length / 16.0))) #figure out what is t
 print "Last block of plaintext is ",
 print start_block
 start_block_index = start_block - 1
-while True:
-    total_length, encrypted_string, IV = encryption_query_parse(pad)
-    blocks = parse_into_blocks(encrypted_string)
-    blocks[len(blocks)-1] = blocks[start_block-1]
-    ciphertext = "".join(blocks)
-    success_flag = decryption_query(ciphertext, IV)
-    if success_flag == "Valid":
-        print "Blocks: ",
-        print blocks
-        print "IV: ",
-        print IV
-        break
+original_iv = ""
+original_blocks = []
+newblocks = []
+total_length = 0
+encrypted_string = ""
+IV = ""
+blocks = []
+ciphertext = ""
+tempblocks = []
+while bytes_found < plaintext_length:
+    print pad
+    while True:
+        if bytes_found == 0:
+            total_length, encrypted_string, IV = encryption_query_parse(pad)
+            blocks = parse_into_blocks(encrypted_string)
+            blocks[len(blocks)-1] = blocks[start_block-1]
+            tempblocks = blocks
+            ciphertext = "".join(blocks)
+            success_flag = decryption_query(ciphertext, IV)
+        else:
+            total_length, encrypted_string, IV = encryption_query_parse(pad)
+            blocks = parse_into_blocks(encrypted_string)
+            newblocks = original_blocks
+            newblocks[len(newblocks)-1] = blocks[start_block_index]
+            tempblocks = blocks
+            blocks = newblocks
+            ciphertext = "".join(blocks)
+            success_flag = decryption_query(ciphertext, original_iv)
+        if success_flag == "Valid":
+            if bytes_found == 0:
+                original_iv = IV
+                original_blocks = blocks
+                print success_flag
+                print "Blocks: ",
+                print blocks
+                print "IV: ",
+                print IV
+            else:
+                print success_flag
+                print "Original Blocks: ",
+                print original_blocks
+                print "New Blocks: ",
+                print blocks
+                print "Original IV: ",
+                print original_iv
+                print "IV: ",
+                print IV
+            xor_block = ""
+            if start_block_index == 0:
+                xor_block = IV
+            else:
+                xor_block = tempblocks[start_block_index - 1]
+            captured_byte = extract_last_byte(blocks[len(blocks)-2], fifteen, xor_block)
+            plaintext.insert(0,captured_byte)
+            print plaintext
+            print "\n"
+            break
+    bytes_found += 1
+    pad += "00"
     #print new_cipher_query
+
+print ''.join(plaintext)
 
 r.close()
